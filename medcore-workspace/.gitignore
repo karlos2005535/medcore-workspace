@@ -1,0 +1,14 @@
+# Dependency
+node_modules/
+*.exe
+
+# Go
+services/*/pb/
+services/*/bin/
+
+# Env rahasia produksi
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
