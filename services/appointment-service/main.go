@@ -75,7 +75,6 @@ func main() {
 
 	// Skenario 3: ResourceExhausted
 	checkDrug(client, "MED-AMX-500", 10000, 2*time.Second)
-
-	// Skenario 4: DeadlineExceeded
-	checkDrug(client, "MED-AMX-500", 10, 500*time.Millisecond)
+	// Skenario 4: DeadlineExceeded (MED-SLOW-500 memicu sleep 2s di server)
+        checkDrug(client, "MED-SLOW-500", 10, 500*time.Millisecond)	
 }
