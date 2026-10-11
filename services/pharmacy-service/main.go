@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"time"
 
 	pb "pharmacy-service/pb"
@@ -72,6 +74,9 @@ func main() {
 		log.Fatalf("Gagal terhubung ke MongoDB: %v", err)
 	}
 
+	// 1. Jalankan REST Server secara paralel (background goroutine) pada port 8081
+	go startRESTServer(client)
+
 	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
 		log.Fatalf("Gagal membuka port 50051: %v", err)
@@ -89,39 +94,39 @@ func main() {
 }
 
 func startRESTServer(mongoClient *mongo.Client) {
-    http.HandleFunc("/api/v1/drugs/check", func(w http.ResponseWriter, r *http.Request) {
-        if r.Method != http.MethodGet {
-            http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-            return
-        }
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/drugs/check", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
 
-        drugCode := r.URL.Query().Get("drug_code")
-        coll := mongoClient.Database("medcore_pharmacy_db").Collection("drugs")
+		drugCode := r.URL.Query().Get("drug_code")
+		coll := mongoClient.Database("medcore_pharmacy_db").Collection("drugs")
 
-        var drug DrugDoc
-        err := coll.FindOne(r.Context(), bson.M{"drug_code": drugCode}).Decode(&drug)
-        if err != nil {
-            w.Header().Set("Content-Type", "application/json")
-            w.WriteHeader(http.StatusNotFound)
-            json.NewEncoder(w).Encode(map[string]string{"error": "Obat tidak ditemukan"})
-            return
-        }
+		var drug DrugDoc
+		err := coll.FindOne(r.Context(), bson.M{"drug_code": drugCode}).Decode(&drug)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Obat tidak ditemukan"})
+			return
+		}
 
-        w.Header().Set("Content-Type", "application/json")
-        json.NewEncoder(w).Encode(map[string]interface{}{
-            "drug_code":     drug.DrugCode,
-            "is_available":  drug.TotalStock >= 10,
-            "current_stock": drug.TotalStock,
-            "unit_price":    drug.UnitPrice,
-            "message":       "Stok obat mencukupi",
-        })
-    })
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"drug_code":     drug.DrugCode,
+			"is_available":  drug.TotalStock >= 10,
+			"current_stock": drug.TotalStock,
+			"unit_price":    drug.UnitPrice,
+			"message":       "Stok obat mencukupi",
+		})
+	})
 
-    log.Println("MedCore Pharmacy REST Baseline aktif pada port :8081")
-    http.ListenAndServe(":8081", nil)
+	log.Println("==================================================")
+	log.Println("MedCore Pharmacy REST Baseline aktif pada port :8081")
+	log.Println("==================================================")
+	if err := http.ListenAndServe(":8081", mux); err != nil {
+		log.Fatalf("Gagal menjalankan REST server: %v", err)
+	}
 }
-```[cite: 21, 22]
-
-4. Di dalam fungsi utama **`main()`** di file yang sama, panggil fungsi REST server secara paralel menggunakan goroutine sebelum server gRPC berjalan:
-   ```go
-   go startRESTServer(client)
