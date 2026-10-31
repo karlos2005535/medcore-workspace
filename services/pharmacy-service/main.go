@@ -10,6 +10,7 @@ import (
 	"time"
 
 	pb "pharmacy-service/pb"
+	"pharmacy-service/consumer"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -21,6 +22,8 @@ import (
 
 const (
 	mongoURI        = "mongodb://adm_pharmacy_svc:SecuredPassPharm2026!@localhost:27018/medcore_pharmacy_db?authSource=admin"
+	// PERHATIKAN BARIS DI BAWAH INI: Ada tambahan %2F sebelum medcore_vhost
+	amqpURI         = "amqp://admin_medcore:SecuredPassRabbit2026!@localhost:5672/%2Fmedcore_vhost"
 	grpcPort        = ":50051"
 	restPort        = ":8081"
 	quotaThreshold  = 5000
@@ -154,6 +157,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	// 1. Koneksi ke MongoDB
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
 	if err != nil {
 		log.Fatalf("Gagal terhubung ke MongoDB: %v", err)
@@ -163,10 +167,16 @@ func main() {
 	}
 	log.Println("Berhasil terhubung ke MongoDB medcore_pharmacy_db")
 
-	// Jalankan REST server paralel
+	// 2. Jalankan REST server secara paralel (background)
 	go startRESTServer(client)
 
-	// Jalankan gRPC server
+	// 3. Jalankan RabbitMQ Consumer secara paralel (background)
+	go func() {
+		log.Println("[Pharmacy Service] Memulai RabbitMQ Consumer...")
+		consumer.StartPrescriptionConsumer(amqpURI, client)
+	}()
+
+	// 4. Jalankan gRPC server (Blocking)
 	lis, err := net.Listen("tcp", grpcPort)
 	if err != nil {
 		log.Fatalf("Gagal membuka port %s: %v", grpcPort, err)
@@ -178,6 +188,7 @@ func main() {
 	log.Println("==================================================")
 	log.Println("MedCore Pharmacy gRPC Service aktif pada port :50051")
 	log.Println("MedCore Pharmacy REST Service aktif pada port :8081")
+	log.Println("MedCore Pharmacy RabbitMQ Consumer aktif (Background)")
 	log.Println("==================================================")
 
 	if err := s.Serve(lis); err != nil {

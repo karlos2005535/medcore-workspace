@@ -1,0 +1,183 @@
+# ============================================================
+# medcore-workspace/docker-compose.db.yml
+# Modul 03 — RabbitMQ EDA + Redis Idempotency Cache
+# ============================================================
+
+services:
+  # ------------------------------------------------------------
+  # 1. PostgreSQL: Patient DB
+  # ------------------------------------------------------------
+  patient-db:
+    image: postgres:16-alpine
+    container_name: medcore-patient-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PATIENT_DB_USER}
+      POSTGRES_PASSWORD: ${PATIENT_DB_PASS}
+      POSTGRES_DB: ${PATIENT_DB_NAME}
+    ports:
+      - "${HOST_PORT_PATIENT_DB}:5432"
+    networks:
+      medcore-net:
+        ipv4_address: 172.28.0.10
+    volumes:
+      - patient_db_vol:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U ${PATIENT_DB_USER} -d ${PATIENT_DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ------------------------------------------------------------
+  # 2. PostgreSQL: Appointment DB
+  # ------------------------------------------------------------
+  appointment-db:
+    image: postgres:16-alpine
+    container_name: medcore-appointment-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${APPOINTMENT_DB_USER}
+      POSTGRES_PASSWORD: ${APPOINTMENT_DB_PASS}
+      POSTGRES_DB: ${APPOINTMENT_DB_NAME}
+    ports:
+      - "${HOST_PORT_APPOINTMENT_DB}:5432"
+    networks:
+      medcore-net:
+        ipv4_address: 172.28.0.11
+    volumes:
+      - appointment_db_vol:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${APPOINTMENT_DB_USER} -d ${APPOINTMENT_DB_NAME}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ------------------------------------------------------------
+  # 3. PostgreSQL: Billing DB
+  # ------------------------------------------------------------
+  billing-db:
+    image: postgres:16-alpine
+    container_name: medcore-billing-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${BILLING_DB_USER}
+      POSTGRES_PASSWORD: ${BILLING_DB_PASS}
+      POSTGRES_DB: ${BILLING_DB_NAME}
+    ports:
+      - "${HOST_PORT_BILLING_DB}:5432"
+    networks:
+      medcore-net:
+        ipv4_address: 172.28.0.12
+    volumes:
+      - billing_db_vol:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U ${BILLING_DB_USER} -d ${BILLING_DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ------------------------------------------------------------
+  # 4. MongoDB: Pharmacy DB
+  # ------------------------------------------------------------
+  pharmacy-db:
+    image: mongo:7.0
+    container_name: medcore-pharmacy-db
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASS}
+      MONGO_INITDB_DATABASE: ${PHARMACY_DB_NAME}
+    ports:
+      - "${HOST_PORT_PHARMACY_DB}:27017"
+    networks:
+      medcore-net:
+        ipv4_address: 172.28.0.13
+    volumes:
+      - pharmacy_db_vol:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ------------------------------------------------------------
+  # 5. RabbitMQ Broker (Modul 03)
+  # ------------------------------------------------------------
+  message-broker:
+    image: rabbitmq:3.13-management-alpine
+    container_name: medcore-message-broker
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_DEFAULT_VHOST}
+    ports:
+      - "${RABBITMQ_HOST_PORT_AMQP}:5672" # Protokol AMQP 0-9-1
+      - "${RABBITMQ_HOST_PORT_MGMT}:15672" # Web Management Dashboard
+    networks:
+      medcore-net:
+        ipv4_address: 172.28.0.20
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ------------------------------------------------------------
+  # 6. Redis: Idempotency Cache (Modul 03, Latihan Mandiri)
+  # ------------------------------------------------------------
+  medcore-redis:
+    image: redis:7-alpine
+    container_name: medcore-redis
+    restart: unless-stopped
+    command:
+      [
+        "redis-server",
+        "--appendonly",
+        "yes",
+        "--maxmemory",
+        "256mb",
+        "--maxmemory-policy",
+        "volatile-lru",
+      ]
+    ports:
+      - "${REDIS_HOST_PORT}:6379"
+    networks:
+      medcore-net:
+        ipv4_address: 172.28.0.21
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# ============================================================
+# Networks
+# ============================================================
+networks:
+  medcore-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+# ============================================================
+# Volumes
+# ============================================================
+volumes:
+  patient_db_vol:
+  appointment_db_vol:
+  pharmacy_db_vol:
+  billing_db_vol:
+  rabbitmq_data:
+  redis_data:
