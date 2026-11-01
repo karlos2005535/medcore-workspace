@@ -2,27 +2,30 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"time"
 
+	"appointment-service/consumer"
 	"appointment-service/publisher"
-	"github.com/google/uuid"
 )
 
 func main() {
-    amqpURI := "amqp://admin_medcore:SecuredPassRabbit2026!@localhost:5672/%2Fmedcore_vhost"
+	amqpURI := "amqp://admin_medcore:SecuredPassRabbit2026!@localhost:5672/%2Fmedcore_vhost"
 	log.Println("[Appointment Service] Menginisialisasi koneksi messaging...")
 
+	// 1. Jalankan Consumer Kompensasi Stok (Langkah 2.4) di background
+	go consumer.StartStockExhaustedConsumer(amqpURI)
+
+	// 2. Inisialisasi Publisher
 	pub, err := publisher.NewEventPublisher(amqpURI)
 	if err != nil {
 		log.Fatalf("Inisialisasi publisher gagal: %v", err)
 	}
 	defer pub.Close()
 
-	// Simulasi event ketika konsultasi selesai
+	// 3. Simulasi event ketika konsultasi selesai (UJI DLQ)
 	simulatedEvent := publisher.ConsultationCompletedEvent{
-	    EventID: "evt-12345-test",
+		EventID:    "evt-uji-duplikat-123",
 		EventName:  "ConsultationCompletedEvent",
 		OccurredAt: time.Now().UTC().Format(time.RFC3339),
 		Producer:   "appointment-service",
@@ -34,7 +37,8 @@ func main() {
 			Prescription: publisher.PrescriptionData{
 				PrescriptionID: "RX-2026-9901",
 				Items: []publisher.PrescriptionItem{
-					{DrugCode: "MED-AMX-500", Quantity: 15, Dosage: "3x1 sehari sesudah makan"},
+					// QUANTITY DIUBAH MENJADI -1 UNTUK UJI DLQ
+					{DrugCode: "MED-AMX-500", Quantity: -1, Dosage: "3x1 sehari sesudah makan"},
 				},
 			},
 			BillingSummary: publisher.BillingData{
@@ -53,5 +57,3 @@ func main() {
 	}
 	log.Println("[Appointment Service] Proses publikasi selesai sempurna.")
 }
-// Jalankan consumer kompensasi stok secara paralel
-go consumer.StartStockExhaustedConsumer(amqpURI)

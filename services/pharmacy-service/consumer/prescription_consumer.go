@@ -79,7 +79,7 @@ func StartPrescriptionConsumer(amqpURI string, mongoClient *mongo.Client) {
 	}
 
 	// 3. Set QoS = 1
-	err = ch.Qos(1, 0, false)
+	err = ch.Qos(10, 0, false)
 	if err != nil {
 		log.Fatalf("[Pharmacy Consumer] Gagal set QoS: %v", err)
 	}
@@ -136,7 +136,7 @@ func StartPrescriptionConsumer(amqpURI string, mongoClient *mongo.Client) {
 			// SIMULASI STOK HABIS (LANGKAH 2.4)
 			// Ubah menjadi true jika ingin menguji pengiriman event kompensasi
 			// -------------------------------------------------------------
-			stokHabis := false
+			stokHabis := true
 			if stokHabis {
 				log.Printf("[Pharmacy Consumer] Stok kosong! Mengirim event kompensasi ke Appointment...")
 				// Memanggil fungsi dari package publisher

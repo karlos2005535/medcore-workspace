@@ -3,6 +3,7 @@ module pharmacy-service
 go 1.26.2
 
 require (
+	github.com/google/uuid v1.6.0
 	github.com/rabbitmq/amqp091-go v1.16.0
 	github.com/redis/go-redis/v9 v9.23.0
 	go.mongodb.org/mongo-driver v1.17.10
